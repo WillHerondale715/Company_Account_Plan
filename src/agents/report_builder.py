@@ -36,7 +36,7 @@ except Exception:
     def path_for(company: str, name: str) -> str:
         out_dir = Path("outputs") / company
         out_dir.mkdir(parents=True, exist_ok=True)
-        return str(out_dir / name)
+        return str(out_dir / name)  # ✅ FIX: Always return string
     def write_json(company: str, key: str, obj: Dict):
         pass
 
@@ -51,11 +51,11 @@ except Exception:
 
 EURUSD = float(os.getenv("EURUSD_RATE", "1.08"))
 
-# -------- Text normalization --------
+# ---------- Text normalization ----------
 def _clean_text(t: str) -> str:
     t = (t or "")
     # Unescape typical Markdown artifacts broadly
-    t = re.sub(r"\\([_`~>\[\]\(\)\#\*\-])", r"\1", t)
+    t = re.sub(r"\\([\_\`~\>\[\]\(\)\#\*\-])", r"\1", t)
     # Currency spacing
     t = re.sub(r",(?=\S)", ", ", t)
     t = re.sub(r"\b(USD|EUR)(?=\d)", r"\1 ", t)
@@ -65,9 +65,9 @@ def _clean_text(t: str) -> str:
 
 def _md_link_to_text(s: str) -> str:
     # alt -> alt (url)
-    return re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1 (\2)", s)
+    return re.sub(r"\[([^\]]+)\]\(([^\)]+)\)", r"\1 (\2)", s)
 
-# -------- Sources discovery --------
+# ---------- Sources discovery ----------
 def _fetch_sources(company: str) -> List[Dict]:
     queries = [
         f"{company} Corporation Financial Report for Q4 and full year 2024 net sales EUR",
@@ -94,7 +94,7 @@ def _fetch_sources(company: str) -> List[Dict]:
         sources.append({"label": "[S3] Macrotrends — Annual USD cross-check", "url": mac["url"]})
     return sources
 
-# -------- Revenue compilation (EUR) --------
+# ---------- Revenue compilation (EUR) ----------
 def _compile_revenue_eur(company: str, years_back: int = 5) -> List[Tuple[int, float]]:
     known_eur = {  # EUR bn (trusted baseline)
         2020: 21.85,
@@ -107,11 +107,9 @@ def _compile_revenue_eur(company: str, years_back: int = 5) -> List[Tuple[int, f
     cutoff = max(years_sorted) - years_back + 1
     return [(y, known_eur[y]) for y in years_sorted if y >= cutoff]
 
-# -------- Segment revenues (PDF-first, then web) --------
+# ---------- Segment revenues ----------
 def _extract_amounts(snippet: str) -> List[Tuple[str, float]]:
-    """
-    Find 'EUR/€ X bn' or 'USD $ X bn' or 'X million/m' amounts in snippet; convert USD to EUR.
-    """
+    """Find 'EUR/€ X bn' or 'USD $ X bn' or 'X million/m' amounts in snippet; convert USD to EUR."""
     out = []
     s = snippet or ""
     # EUR bn
@@ -156,7 +154,6 @@ def _web_fill_segments(company: str, year: int = 2024) -> List[Dict]:
                 # Prefer EUR
                 for cur, val_bn in amounts:
                     if cur == "USD":
-                        # convert USD bn to EUR bn (approx) using EURUSD (EUR→USD), so USD→EUR = / EURUSD
                         val_bn = round(val_bn / EURUSD, 3)
                     if val_bn and (best_val is None):
                         best_val = round(val_bn, 3)
@@ -173,9 +170,7 @@ def _web_fill_segments(company: str, year: int = 2024) -> List[Dict]:
     return rows
 
 def _get_segment_rows(company: str, year: int) -> List[Dict]:
-    """
-    Try PDF-first; if empty, try web-fill; if still empty, return rows with 'Not publicly available'.
-    """
+    """Try PDF-first; if empty, try web-fill; if still empty, return rows with 'Not publicly available'."""
     rows = []
     if PDF_OK:
         try:
@@ -192,10 +187,10 @@ def _get_segment_rows(company: str, year: int) -> List[Dict]:
     # Normalize display for missing values
     for r in rows:
         if not isinstance(r.get("Revenue_EUR_bn"), (int, float)):
-            r["Revenue_EUR_bn"] = None  # we'll print as "Not publicly available"
+            r["Revenue_EUR_bn"] = None
     return rows
 
-# -------- Chart builder (line labels if multi-year; none if single-year) --------
+# ---------- Chart builder ----------
 def _build_chart_png(company: str, series: List[Tuple[int, float]]) -> Optional[str]:
     if len(series) < 2:
         return None
@@ -218,7 +213,7 @@ def _build_chart_png(company: str, series: List[Tuple[int, float]]) -> Optional[
     plt.close(fig)
     return str(out_png)
 
-# -------- Table helpers --------
+# ---------- Table helpers ----------
 def _shade_cell(cell, color_hex: str = "D9D9D9"):
     tc = cell._tc
     tcPr = tc.get_or_add_tcPr()
@@ -232,7 +227,6 @@ def _style_table(tbl):
     except Exception:
         pass
     cols = tbl.columns
-    # widths only if 3/4 cols present
     if len(cols) >= 3:
         cols[0].width = Cm(3.2)
         cols[1].width = Cm(3.0)
@@ -250,10 +244,9 @@ def _style_table_4(tbl):
         cols[2].width = Cm(4.0)
         cols[3].width = Cm(6.0)
 
-# -------- Markdown-aware insertion with "in-place" updates --------
+# ---------- Markdown-aware insertion ----------
 def _insert_or_update_sections(doc: Document, md_text: str, company: str, series: List[Tuple[int, float]], sources: List[Dict]):
-    """
-    Reads the markdown content and:
+    """Reads the markdown content and:
     - When encountering "Revenue Graph" section: insert chart only if multi-year; skip ASCII art.
     - When encountering "TOP PRODUCTS TABLE"/"Top Products / Segments": build a Word table with data (PDF-first then web); do not duplicate.
     - Otherwise: render headings/bullets/links cleanly.
@@ -294,7 +287,6 @@ def _insert_or_update_sections(doc: Document, md_text: str, company: str, series
                     cap_run.italic = True
                 # Skip ASCII block lines if present
                 i += 1
-                # Skip until next heading or blank line after code fences; guard if ASCII present
                 while i < len(lines) and not lines[i].startswith("## "):
                     i += 1
                 continue
@@ -357,7 +349,7 @@ def _insert_or_update_sections(doc: Document, md_text: str, company: str, series
         doc.add_paragraph(line)
         i += 1
 
-# -------- Core doc builder --------
+# ---------- Core doc builder ----------
 def _build_doc(
     company: str,
     directive: str,
@@ -368,14 +360,12 @@ def _build_doc(
 ) -> str:
     out_docx = path_for(company, f"{company.lower().replace(' ', '_')}_account_plan_improved.docx")
     doc = Document()
-
     # Page setup
     for sec in doc.sections:
         sec.top_margin = Inches(0.75)
         sec.bottom_margin = Inches(0.75)
         sec.left_margin = Inches(0.8)
         sec.right_margin = Inches(0.8)
-
     normal = doc.styles["Normal"]
     normal.font.name = "Calibri"
     try:
@@ -383,7 +373,6 @@ def _build_doc(
     except Exception:
         pass
     normal.font.size = Pt(11)
-
     # Title
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -391,24 +380,19 @@ def _build_doc(
     t.bold = True
     t.font.size = Pt(16)
     doc.add_paragraph("")
-
     # Content
     if edited_markdown and edited_markdown.strip():
         _insert_or_update_sections(doc, edited_markdown.strip(), company, series, sources)
     elif sections_dict:
-        # NEW: If "Directive Response" exists, render it first as its own section
+        # Render Directive Response first
         dir_text = (sections_dict.get("Directive Response") or "").strip()
         if dir_text:
             _insert_or_update_sections(doc, f"# Directive Response\n\n{dir_text}", company, series, sources)
-
-        # If "Structured Insights" exists, render it next as Overview & Strategy
+        # Render Structured Insights next
         if sections_dict.get("Structured Insights"):
-            _insert_or_update_sections(
-                doc,
-                "## Overview & Strategy\n\n" + sections_dict.get("Structured Insights", ""),
-                company, series, sources
-            )
-        # Then render common section keys in order (including special sections)
+            _insert_or_update_sections(doc, "## Overview & Strategy\n\n" + sections_dict.get("Structured Insights", ""),
+                                       company, series, sources)
+        # Render common section keys
         ordered_keys = [
             ("Overview", "## Overview"),
             ("Competitors", "## Competitors"),
@@ -427,7 +411,6 @@ def _build_doc(
         combined_md = "\n\n".join(md_agg)
         if combined_md.strip():
             _insert_or_update_sections(doc, combined_md, company, series, sources)
-
     # References
     p_ref = doc.add_paragraph()
     try:
@@ -437,59 +420,42 @@ def _build_doc(
     p_ref.add_run("References").bold = True
     for s in sources:
         doc.add_paragraph(f"{s['label']}: {s['url']}")
-
     # Save
     doc.save(str(out_docx))
     return str(out_docx)
 
-# -------- Public builders --------
-def build_full_report(
-    company: str,
-    directive: str,
-    sections_dict: Dict[str, str],
-    years_back: int = 5,
-    currency: str = "EUR"
-) -> Dict[str, str]:
+# ---------- Public builders ----------
+def build_full_report(company: str, directive: str, sections_dict: Dict[str, str], years_back: int = 5, currency: str = "EUR") -> Dict[str, str]:
     sources = _fetch_sources(company)
     series = _compile_revenue_eur(company, years_back=years_back)
     out_docx = _build_doc(company, directive, series, sources, sections_dict=sections_dict)
     write_json(company, "report_financials", {
         "directive": directive,
         "series": series,
-        "chart_png": (path_for(company, f"{company.lower().replace(' ', '_')}_revenue_trend_eur.png")
-                      if len(series) >= 2 else None),
-        "docx_path": out_docx,
+        "chart_png": str(path_for(company, f"{company.lower().replace(' ', '_')}_revenue_trend_eur.png")) if len(series) >= 2 else None,
+        "docx_path": str(out_docx),
         "sources": sources
     })
     return {
-        "chart_path": (path_for(company, f"{company.lower().replace(' ', '_')}_revenue_trend_eur.png")
-                       if len(series) >= 2 else None),
-        "docx_path": out_docx,
+        "chart_path": str(path_for(company, f"{company.lower().replace(' ', '_')}_revenue_trend_eur.png")) if len(series) >= 2 else None,
+        "docx_path": str(out_docx),
         "sources": sources
     }
 
-def build_full_report_from_markdown(
-    company: str,
-    directive: str,
-    sections_markdown: str,
-    years_back: int = 5,
-    currency: str = "EUR"
-) -> Dict[str, str]:
+def build_full_report_from_markdown(company: str, directive: str, sections_markdown: str, years_back: int = 5, currency: str = "EUR") -> Dict[str, str]:
     sources = _fetch_sources(company)
     series = _compile_revenue_eur(company, years_back=years_back)
     out_docx = _build_doc(company, directive, series, sources, edited_markdown=sections_markdown)
     write_json(company, "report_financials", {
         "directive": directive,
         "series": series,
-        "chart_png": (path_for(company, f"{company.lower().replace(' ', '_')}_revenue_trend_eur.png")
-                      if len(series) >= 2 else None),
-        "docx_path": out_docx,
+        "chart_png": str(path_for(company, f"{company.lower().replace(' ', '_')}_revenue_trend_eur.png")) if len(series) >= 2 else None,
+        "docx_path": str(out_docx),
         "sources": sources,
         "edited": True
     })
     return {
-        "chart_path": (path_for(company, f"{company.lower().replace(' ', '_')}_revenue_trend_eur.png")
-                       if len(series) >= 2 else None),
-        "docx_path": out_docx,
+        "chart_path": str(path_for(company, f"{company.lower().replace(' ', '_')}_revenue_trend_eur.png")) if len(series) >= 2 else None,
+        "docx_path": str(out_docx),
         "sources": sources
     }
